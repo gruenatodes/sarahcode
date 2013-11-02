@@ -30,7 +30,7 @@ value=zeros(M,N);
 % end
 
 
-z_norms = sqrt(sum(z .^ 2, 1)); % is a row vector containing 2-norms of columns of z
+z_norms = (sum(z .^ 2, 1)) .^ 0.5; % is a row vector containing 2-norms of columns of z
 z_norms_mat = repmat(z_norms, [M 1]);
 t_mat = repmat(t, [1 N]);
 

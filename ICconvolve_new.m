@@ -85,31 +85,41 @@ u_0 = pdeintrp(P, T, u_0);
 % points
 tildew_j = zeros(nx,ny,nt); % better to prealloate arrays than structures or cells
 k_vec = (1:nt-2)' * dt;
+k_vec = [k_vec - dt/2; k_vec(end) + dt / 2]; % pick midpoints
+matlabpool
 tic
 for i = 1:nx
-    for j = 1:ny
+    tildew_slice = zeros(ny,nt-2);
+    xi = x(i);
+    parfor j = 1:ny
         %compute the tildew_j at time tk=(k-1)*dt at grid point xij = (x(i),y(j))
-        xij = [x(i); y(j)];
+        xij = [xi; y(j)];
         
         %approximate convolution
         % ts = tic;
-        tempmat = C_0 / (2 * pi) / dt * ...
-            ( Greenswave_new(mid - repmat(xij, [1 nelem]), k_vec + dt/2, 1/sqrt(C_0)) - ...
-            Greenswave_new(mid - repmat(xij, [1 nelem]), k_vec - dt/2, 1/sqrt(C_0)) ) .* ...
-            repmat(tildesigma .* u_0 + sigma_0 .* tildeu, [nt-2 1]); % returns nelem-by-(nt-2) matrix to be summed over nelem
+        z_vec = bsxfun(@minus, mid, xij);
+        Gw_res = Greenswave_new(z_vec, k_vec, 1/sqrt(C_0));
+        Gw_res = Gw_res(:,2:end) - Gw_res(1:end-1); % nelem-by-(nt-2) matrix
+        sigma_u_vec = tildesigma .* u_0 + sigma_0 .* tildeu; % nelem-by-1 vector
+        tempmat = bsxfun(@times, Gw_res, sigma_u_vec); 
         % c entered difference for \partial_t G: second order
         
         % te = toc(ts);
         %disp(['tildew_j at time k at point xij: convolution done in ' num2str(te) ' seconds']);
-        tildew_j(i,j,2:nt-1) = sizeelem * sum(tempmat, 2); %space integration, note elements are all the same size
+        tildew_slice(j,:) = sum(tempmat, 1); %space integration, note elements are all the same size
     end
     
-    if mod(i,10) == 0
+    tildew_j(i,:,:) = permute(tildew_slice, [3 1 2]);
+    
+    if mod(i,5) == 0
         toc
-        disp([' >> time point: j = ', num2str(j), ' << ']);
+        disp([' >> time point: i = ', num2str(i), ' << ']);
         pause(0.5)
     end
 end
+
+% took constants out of the loop, multiply back in:
+tildew_j = tildew_j * C_0 * sizeelem / (2 * pi * dt);
 
 
 % if k==1
@@ -128,7 +138,8 @@ end
 %         (2*dt) * (tildesigma(p) * u_0(p) + sigma_0(p) * tildeu(p));
 %     % backward difference for \partial_t G: second order
 % else
-    
+
+matlabpool close force
 end
 
 
